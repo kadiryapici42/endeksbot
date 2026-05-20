@@ -278,6 +278,19 @@ app.job_queue.run_repeating(
     interval=60,
     first=1
 )
+from flask import Flask
+from threading import Thread
+
+app_flask = Flask('')
+
+@app_flask.route('/')
+def home():
+    return "Bot çalışıyor."
+
+def run():
+    app_flask.run(host='0.0.0.0', port=10000)
+
+Thread(target=run).start()
 
 print("🤖 Bot aktif...")
 app.run_polling()

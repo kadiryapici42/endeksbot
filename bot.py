@@ -2,10 +2,10 @@ import pandas as pd
 import re
 import time
 import os
-import asyncio
+import threading
 
 from telegram import Update
-from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
+from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
 
 # ================== AYARLAR ==================
 
@@ -25,207 +25,180 @@ ALLOWED_GROUP_IDS = [
     -1003935191465
 ]
 
-MUAF_GROUP_IDS = [
-    -1003989682635
-]
+MUAF_GROUP_IDS = [-1003989682635]
 
 NOT_FOUND_MSG = "❗️ Tesisat numarası bulunamadı."
 
 # ================== MEMORY ==================
 
+df = pd.DataFrame()
 photo_timers = {}
 tesisat_counts = {}
 
-user_colors = ["🔴", "🟢", "🔵", "🟡", "🟣", "🟠"]
+user_colors = ["🔴","🟢","🔵","🟡","🟣","🟠"]
 
-def get_user_color(user_id):
-    return user_colors[user_id % len(user_colors)]
+def color(uid):
+    return user_colors[uid % len(user_colors)]
 
-# ================== EXCEL LOAD ==================
+# ================== EXCEL ==================
 
 def load_excel():
+    global df
     try:
         if not os.path.exists(EXCEL_FILE):
-            print("❌ Excel yok:", EXCEL_FILE)
-            return pd.DataFrame()
+            print("Excel yok")
+            df = pd.DataFrame()
+            return
 
-        df = pd.read_excel(EXCEL_FILE)
-        df.columns = [c.strip() for c in df.columns]
+        data = pd.read_excel(EXCEL_FILE)
+        data.columns = [c.strip() for c in data.columns]
 
-        if "Tesisat" in df.columns:
-            df["Tesisat"] = df["Tesisat"].astype(str).str.strip()
+        if "Tesisat" in data.columns:
+            data["Tesisat"] = data["Tesisat"].astype(str).str.strip()
 
-        return df
+        df = data
+        print("📊 Excel güncellendi")
 
     except Exception as e:
-        print("❌ Excel hata:", e)
-        return pd.DataFrame()
+        print("Excel hata:", e)
+        df = pd.DataFrame()
 
-df = load_excel()
+# ================== HELP ==================
 
-# ================== BACKGROUND LOOP ==================
+def safe(v):
+    return "" if pd.isna(v) else v
 
-async def excel_updater():
+def get_endeks(t):
     global df
-    while True:
-        df = load_excel()
-        print("📊 Excel güncellendi")
-        await asyncio.sleep(60)
-
-# ================== HELPERS ==================
-
-def safe(val):
-    return "" if pd.isna(val) else val
-
-def get_endeks(num):
-    row = df[df["Tesisat"] == num]
-
-    if row.empty:
+    if df.empty:
         return None
 
-    data = row.iloc[0]
+    r = df[df["Tesisat"] == str(t)]
+    if r.empty:
+        return None
+
+    x = r.iloc[0]
 
     return (
-        f"<b>{num}</b>\n"
-        f"<b>T1:</b> {safe(data.get('T1'))}\n"
-        f"<b>T2:</b> {safe(data.get('T2'))}\n"
-        f"<b>T3:</b> {safe(data.get('T3'))}\n"
-        f"<b>RI:</b> {safe(data.get('RI'))}\n"
-        f"<b>RC:</b> {safe(data.get('RC'))}"
+        f"<b>{t}</b>\n"
+        f"T1: {safe(x.get('T1'))}\n"
+        f"T2: {safe(x.get('T2'))}\n"
+        f"T3: {safe(x.get('T3'))}\n"
+        f"RI: {safe(x.get('RI'))}\n"
+        f"RC: {safe(x.get('RC'))}"
     )
 
-def is_admin(user_id):
-    return user_id == ADMIN_ID
+def is_admin(uid):
+    return uid == ADMIN_ID
 
-# ================== MESSAGE HANDLER ==================
+# ================== HANDLER ==================
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     chat = update.effective_chat
-    chat_id = chat.id
-    chat_type = chat.type
-
-    if chat_type in ("group", "supergroup") and chat_id not in ALLOWED_GROUP_IDS:
+    if chat.type in ("group", "supergroup") and chat.id not in ALLOWED_GROUP_IDS:
         return
 
-    is_muaf_group = chat_id in MUAF_GROUP_IDS
+    is_muaf = chat.id in MUAF_GROUP_IDS
 
     user = update.effective_user
-    user_id = user.id
+    uid = user.id
     name = user.first_name
-    color = get_user_color(user_id)
+    col = color(uid)
 
     text = update.message.text or update.message.caption or ""
     photos = update.message.photo
 
-    tesisatlar = re.findall(r"\b\d+\b", text)
+    nums = re.findall(r"\b\d+\b", text)
 
-    if not tesisatlar and not photos:
-        return
-
-    # ================= ADMIN =================
-
-    if is_admin(user_id):
-
-        cevap = f"{color} <b>{name}</b>\n━━━━━━━━━━━━━━━\n\n"
-
-        for i, num in enumerate(tesisatlar, 1):
-            endeks = get_endeks(num)
-            cevap += f"🔢 <b>{i}. Tesisat</b>\n{endeks or NOT_FOUND_MSG}\n\n"
-
-        await update.message.reply_text(
-            cevap,
-            parse_mode="HTML",
-            reply_to_message_id=update.message.message_id
-        )
+    if not nums and not photos:
         return
 
     now = time.time()
 
-    if user_id in photo_timers and now - photo_timers[user_id] > 120:
-        photo_timers.pop(user_id, None)
-        tesisat_counts.pop(user_id, None)
+    if uid in photo_timers and now - photo_timers[uid] > 120:
+        photo_timers.pop(uid, None)
+        tesisat_counts.pop(uid, None)
 
-    # ================= MUAF GRUP =================
+    # ================= ADMIN =================
 
-    if is_muaf_group and tesisatlar:
+    if is_admin(uid):
+        msg = f"{col} <b>{name}</b>\n\n"
 
-        tesisatlar = tesisatlar[:5]
+        for i, n in enumerate(nums[:10], 1):
+            msg += f"{i}. {get_endeks(n) or NOT_FOUND_MSG}\n\n"
 
-        cevap = f"{color} <b>{name}</b>\n━━━━━━━━━━━━━━━\n\n"
-
-        for i, num in enumerate(tesisatlar, 1):
-            endeks = get_endeks(num)
-            cevap += f"🔢 <b>{i}. Tesisat</b>\n{endeks or NOT_FOUND_MSG}\n\n"
-
-        await update.message.reply_text(
-            cevap,
-            parse_mode="HTML",
-            reply_to_message_id=update.message.message_id
-        )
+        await update.message.reply_text(msg, parse_mode="HTML")
         return
 
-    # ================= FOTO + TESİSAT =================
+    # ================= MUAF =================
 
-    if photos and tesisatlar:
+    if is_muaf and nums:
+        msg = f"{col} <b>{name}</b>\n\n"
 
-        tesisatlar = tesisatlar[:5]
+        for i, n in enumerate(nums[:5], 1):
+            msg += f"{i}. {get_endeks(n) or NOT_FOUND_MSG}\n\n"
 
-        cevap = f"{color} <b>{name}</b>\n━━━━━━━━━━━━━━━\n\n"
-
-        for i, num in enumerate(tesisatlar, 1):
-            endeks = get_endeks(num)
-            cevap += f"🔢 <b>{i}. Tesisat</b>\n{endeks or NOT_FOUND_MSG}\n\n"
-
-        await update.message.reply_text(
-            cevap,
-            parse_mode="HTML",
-            reply_to_message_id=update.message.message_id
-        )
-
-        photo_timers[user_id] = now
-        tesisat_counts[user_id] = len(tesisatlar)
+        await update.message.reply_text(msg, parse_mode="HTML")
         return
 
-    # ================= SADECE TESİSAT =================
+    # ================= PHOTO + TESİSAT =================
 
-    if tesisatlar and not photos:
+    if photos and nums:
+        msg = f"{col} <b>{name}</b>\n\n"
 
-        if user_id not in photo_timers:
-            await update.message.reply_text("❗️ Önce fotoğraf göndermelisin.")
+        for i, n in enumerate(nums[:5], 1):
+            msg += f"{i}. {get_endeks(n) or NOT_FOUND_MSG}\n\n"
+
+        photo_timers[uid] = now
+        tesisat_counts[uid] = len(nums)
+
+        await update.message.reply_text(msg, parse_mode="HTML")
+        return
+
+    # ================= ONLY TESISAT =================
+
+    if nums and not photos:
+
+        if uid not in photo_timers:
+            await update.message.reply_text("❗️ Önce fotoğraf gönder")
             return
 
-        cevap = f"{color} <b>{name}</b>\n━━━━━━━━━━━━━━━\n\n"
+        msg = f"{col} <b>{name}</b>\n\n"
 
-        for i, num in enumerate(tesisatlar, 1):
-            endeks = get_endeks(num)
-            cevap += f"🔢 <b>{i}. Tesisat</b>\n{endeks or NOT_FOUND_MSG}\n\n"
+        for i, n in enumerate(nums[:10], 1):
+            msg += f"{i}. {get_endeks(n) or NOT_FOUND_MSG}\n\n"
 
-        await update.message.reply_text(
-            cevap,
-            parse_mode="HTML",
-            reply_to_message_id=update.message.message_id
-        )
+        await update.message.reply_text(msg, parse_mode="HTML")
         return
 
-    # ================= SADECE FOTO =================
+    # ================= ONLY PHOTO =================
 
     if photos:
-        photo_timers[user_id] = now
-        tesisat_counts[user_id] = 0
-        return
+        photo_timers[uid] = now
+        tesisat_counts[uid] = 0
 
+# ================== BACKGROUND LOOP (SAFE) ==================
 
-# ================== BOT START ==================
+def excel_loop():
+    while True:
+        load_excel()
+        time.sleep(60)
 
-app = ApplicationBuilder().token(BOT_TOKEN).build()
+# ================== MAIN ==================
 
-app.add_handler(
-    MessageHandler(filters.TEXT | filters.PHOTO, handle_message)
-)
+def main():
 
-print("🤖 Bot aktif...")
+    load_excel()
 
-# background excel updater
+    threading.Thread(target=excel_loop, daemon=True).start()
 
-app.run_polling()
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    app.add_handler(MessageHandler(filters.TEXT | filters.PHOTO, handle))
+
+    print("🤖 Bot aktif...")
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()

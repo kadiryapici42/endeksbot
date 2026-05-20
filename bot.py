@@ -1,13 +1,13 @@
 import pandas as pd
 import re
 import time
+import os
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
 
 # ================== AYARLAR ==================
 
-BOT_TOKEN = "8134035994:AAGbDKtDPADu0P59DthBkGDx7FZeIuewAKQ"
-
+BOT_TOKEN = "YOUR_BOT_TOKEN"
 EXCEL_FILE = "tesisatlar.xlsx"
 
 ADMIN_ID = 7311284778
@@ -23,33 +23,41 @@ ALLOWED_GROUP_IDS = [
     -1003935191465
 ]
 
-# FOTOĞRAF VE SÜRE MUAF GRUPLAR
 MUAF_GROUP_IDS = [
     -1003989682635
 ]
 
 NOT_FOUND_MSG = "❗️ Tesisat numarası bulunamadı."
 
-# =============================================
+# ================== MEMORY ==================
 
-pending_users = {}
 photo_timers = {}
 tesisat_counts = {}
-
-# ================== RENK ==================
 
 user_colors = ["🔴","🟢","🔵","🟡","🟣","🟠"]
 
 def get_user_color(user_id):
     return user_colors[user_id % len(user_colors)]
 
-# ================== EXCEL ==================
+# ================== EXCEL SAFE LOAD ==================
 
 def load_excel():
-    df = pd.read_excel(EXCEL_FILE)
-    df.columns = [c.strip() for c in df.columns]
-    df["Tesisat"] = df["Tesisat"].astype(str).str.strip()
-    return df
+    try:
+        if not os.path.exists(EXCEL_FILE):
+            print("❌ Excel bulunamadı:", EXCEL_FILE)
+            return pd.DataFrame()
+
+        df = pd.read_excel(EXCEL_FILE)
+        df.columns = [c.strip() for c in df.columns]
+
+        if "Tesisat" in df.columns:
+            df["Tesisat"] = df["Tesisat"].astype(str).str.strip()
+
+        return df
+
+    except Exception as e:
+        print("❌ Excel hata:", e)
+        return pd.DataFrame()
 
 df = load_excel()
 
@@ -58,7 +66,7 @@ async def update_data_periodically(context: ContextTypes.DEFAULT_TYPE):
     df = load_excel()
     print("📊 Excel güncellendi")
 
-# ================== YARDIMCI ==================
+# ================== HELPERS ==================
 
 def safe(val):
     return "" if pd.isna(val) else val
@@ -83,7 +91,7 @@ def get_endeks(num):
 def is_admin(user_id):
     return user_id == ADMIN_ID
 
-# ================== MESAJ ==================
+# ================== MESSAGE HANDLER ==================
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -91,12 +99,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = chat.id
     chat_type = chat.type
 
-    print("GRUP ID:", chat_id)
-
     if chat_type in ("group", "supergroup") and chat_id not in ALLOWED_GROUP_IDS:
         return
 
-    # MUAF GRUP KONTROLÜ
     is_muaf_group = chat_id in MUAF_GROUP_IDS
 
     user = update.effective_user
@@ -124,15 +129,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         else:
             sıra = 1
-
             for num in tesisatlar:
                 endeks = get_endeks(num)
-
-                if endeks:
-                    cevap += f"🔢 <b>{sıra}. Tesisat</b>\n{endeks}\n\n"
-                else:
-                    cevap += f"🔢 <b>{sıra}. Tesisat</b>\n{NOT_FOUND_MSG}\n\n"
-
+                cevap += f"🔢 <b>{sıra}. Tesisat</b>\n{endeks or NOT_FOUND_MSG}\n\n"
                 sıra += 1
 
         await update.message.reply_text(
@@ -140,7 +139,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="HTML",
             reply_to_message_id=update.message.message_id
         )
-
         return
 
     now = time.time()
@@ -157,29 +155,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         cevap = f"{color} <b>{name}</b>\n━━━━━━━━━━━━━━━\n\n"
 
-        if len(tesisatlar) == 1:
-            endeks = get_endeks(tesisatlar[0])
-            cevap += f"{endeks if endeks else NOT_FOUND_MSG}\n"
-
-        else:
-            sıra = 1
-
-            for num in tesisatlar:
-                endeks = get_endeks(num)
-
-                if endeks:
-                    cevap += f"🔢 <b>{sıra}. Tesisat</b>\n{endeks}\n\n"
-                else:
-                    cevap += f"🔢 <b>{sıra}. Tesisat</b>\n{NOT_FOUND_MSG}\n\n"
-
-                sıra += 1
+        sıra = 1
+        for num in tesisatlar:
+            endeks = get_endeks(num)
+            cevap += f"🔢 <b>{sıra}. Tesisat</b>\n{endeks or NOT_FOUND_MSG}\n\n"
+            sıra += 1
 
         await update.message.reply_text(
             cevap,
             parse_mode="HTML",
             reply_to_message_id=update.message.message_id
         )
-
         return
 
     # ================= FOTO + TESİSAT =================
@@ -190,22 +176,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         cevap = f"{color} <b>{name}</b>\n━━━━━━━━━━━━━━━\n\n"
 
-        if len(tesisatlar) == 1:
-            endeks = get_endeks(tesisatlar[0])
-            cevap += f"{endeks if endeks else NOT_FOUND_MSG}\n"
-
-        else:
-            sıra = 1
-
-            for num in tesisatlar:
-                endeks = get_endeks(num)
-
-                if endeks:
-                    cevap += f"🔢 <b>{sıra}. Tesisat</b>\n{endeks}\n\n"
-                else:
-                    cevap += f"🔢 <b>{sıra}. Tesisat</b>\n{NOT_FOUND_MSG}\n\n"
-
-                sıra += 1
+        sıra = 1
+        for num in tesisatlar:
+            endeks = get_endeks(num)
+            cevap += f"🔢 <b>{sıra}. Tesisat</b>\n{endeks or NOT_FOUND_MSG}\n\n"
+            sıra += 1
 
         await update.message.reply_text(
             cevap,
@@ -215,7 +190,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         photo_timers[user_id] = now
         tesisat_counts[user_id] = len(tesisatlar)
-
         return
 
     # ================= SADECE TESİSAT =================
@@ -223,38 +197,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if tesisatlar and not photos:
 
         if user_id not in photo_timers:
-
-            await update.message.reply_text(
-                "❗️ Önce fotoğraf göndermelisin."
-            )
-
+            await update.message.reply_text("❗️ Önce fotoğraf göndermelisin.")
             return
 
         cevap = f"{color} <b>{name}</b>\n━━━━━━━━━━━━━━━\n\n"
 
-        if len(tesisatlar) == 1:
-            endeks = get_endeks(tesisatlar[0])
-            cevap += f"{endeks if endeks else NOT_FOUND_MSG}\n"
-
-        else:
-            sıra = 1
-
-            for num in tesisatlar:
-                endeks = get_endeks(num)
-
-                if endeks:
-                    cevap += f"🔢 <b>{sıra}. Tesisat</b>\n{endeks}\n\n"
-                else:
-                    cevap += f"🔢 <b>{sıra}. Tesisat</b>\n{NOT_FOUND_MSG}\n\n"
-
-                sıra += 1
+        sıra = 1
+        for num in tesisatlar:
+            endeks = get_endeks(num)
+            cevap += f"🔢 <b>{sıra}. Tesisat</b>\n{endeks or NOT_FOUND_MSG}\n\n"
+            sıra += 1
 
         await update.message.reply_text(
             cevap,
             parse_mode="HTML",
             reply_to_message_id=update.message.message_id
         )
-
         return
 
     # ================= SADECE FOTO =================
@@ -262,10 +220,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if photos:
         photo_timers[user_id] = now
         tesisat_counts[user_id] = 0
-
         return
 
-# ================== BOT ==================
+
+# ================== BOT START ==================
 
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
@@ -273,11 +231,13 @@ app.add_handler(
     MessageHandler(filters.TEXT | filters.PHOTO, handle_message)
 )
 
-app.job_queue.run_repeating(
-    update_data_periodically,
-    interval=60,
-    first=1
-)
+# SAFE JOBQUEUE (optional)
+if app.job_queue:
+    app.job_queue.run_repeating(
+        update_data_periodically,
+        interval=60,
+        first=1
+    )
 
 print("🤖 Bot aktif...")
 app.run_polling()

@@ -3,15 +3,13 @@ import re
 import time
 import os
 import asyncio
-from flask import Flask
-from threading import Thread
 
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
 
 # ================== AYARLAR ==================
 
-BOT_TOKEN = "8134035994:AAGbDKtDPADu0P59DthBkGDx7FZeIuewAKQ"
+BOT_TOKEN = "BURAYA_BOT_TOKEN"
 EXCEL_FILE = "tesisatlar.xlsx"
 
 ADMIN_ID = 7311284778
@@ -38,17 +36,17 @@ NOT_FOUND_MSG = "❗️ Tesisat numarası bulunamadı."
 photo_timers = {}
 tesisat_counts = {}
 
-user_colors = ["🔴","🟢","🔵","🟡","🟣","🟠"]
+user_colors = ["🔴", "🟢", "🔵", "🟡", "🟣", "🟠"]
 
 def get_user_color(user_id):
     return user_colors[user_id % len(user_colors)]
 
-# ================== EXCEL ==================
+# ================== EXCEL LOAD ==================
 
 def load_excel():
     try:
         if not os.path.exists(EXCEL_FILE):
-            print("Excel bulunamadı:", EXCEL_FILE)
+            print("❌ Excel yok:", EXCEL_FILE)
             return pd.DataFrame()
 
         df = pd.read_excel(EXCEL_FILE)
@@ -60,14 +58,14 @@ def load_excel():
         return df
 
     except Exception as e:
-        print("Excel hata:", e)
+        print("❌ Excel hata:", e)
         return pd.DataFrame()
 
 df = load_excel()
 
-# ================== BACKGROUND UPDATE ==================
+# ================== BACKGROUND LOOP ==================
 
-async def periodic_update():
+async def excel_updater():
     global df
     while True:
         df = load_excel()
@@ -131,15 +129,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         cevap = f"{color} <b>{name}</b>\n━━━━━━━━━━━━━━━\n\n"
 
-        if len(tesisatlar) == 1:
-            endeks = get_endeks(tesisatlar[0])
-            cevap += f"{endeks if endeks else NOT_FOUND_MSG}\n"
-        else:
-            sıra = 1
-            for num in tesisatlar:
-                endeks = get_endeks(num)
-                cevap += f"🔢 <b>{sıra}. Tesisat</b>\n{endeks or NOT_FOUND_MSG}\n\n"
-                sıra += 1
+        for i, num in enumerate(tesisatlar, 1):
+            endeks = get_endeks(num)
+            cevap += f"🔢 <b>{i}. Tesisat</b>\n{endeks or NOT_FOUND_MSG}\n\n"
 
         await update.message.reply_text(
             cevap,
@@ -162,11 +154,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         cevap = f"{color} <b>{name}</b>\n━━━━━━━━━━━━━━━\n\n"
 
-        sıra = 1
-        for num in tesisatlar:
+        for i, num in enumerate(tesisatlar, 1):
             endeks = get_endeks(num)
-            cevap += f"🔢 <b>{sıra}. Tesisat</b>\n{endeks or NOT_FOUND_MSG}\n\n"
-            sıra += 1
+            cevap += f"🔢 <b>{i}. Tesisat</b>\n{endeks or NOT_FOUND_MSG}\n\n"
 
         await update.message.reply_text(
             cevap,
@@ -183,11 +173,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         cevap = f"{color} <b>{name}</b>\n━━━━━━━━━━━━━━━\n\n"
 
-        sıra = 1
-        for num in tesisatlar:
+        for i, num in enumerate(tesisatlar, 1):
             endeks = get_endeks(num)
-            cevap += f"🔢 <b>{sıra}. Tesisat</b>\n{endeks or NOT_FOUND_MSG}\n\n"
-            sıra += 1
+            cevap += f"🔢 <b>{i}. Tesisat</b>\n{endeks or NOT_FOUND_MSG}\n\n"
 
         await update.message.reply_text(
             cevap,
@@ -209,11 +197,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         cevap = f"{color} <b>{name}</b>\n━━━━━━━━━━━━━━━\n\n"
 
-        sıra = 1
-        for num in tesisatlar:
+        for i, num in enumerate(tesisatlar, 1):
             endeks = get_endeks(num)
-            cevap += f"🔢 <b>{sıra}. Tesisat</b>\n{endeks or NOT_FOUND_MSG}\n\n"
-            sıra += 1
+            cevap += f"🔢 <b>{i}. Tesisat</b>\n{endeks or NOT_FOUND_MSG}\n\n"
 
         await update.message.reply_text(
             cevap,
@@ -222,13 +208,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
+    # ================= SADECE FOTO =================
+
     if photos:
         photo_timers[user_id] = now
         tesisat_counts[user_id] = 0
         return
 
 
-# ================== BOT ==================
+# ================== BOT START ==================
 
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
@@ -238,22 +226,7 @@ app.add_handler(
 
 print("🤖 Bot aktif...")
 
-# background task
-asyncio.create_task(periodic_update())
-
-# ================== FLASK ==================
-
-app_flask = Flask(__name__)
-
-@app_flask.route("/")
-def home():
-    return "Bot çalışıyor."
-
-def run():
-    app_flask.run(host="0.0.0.0", port=10000)
-
-Thread(target=run).start()
-
-# ================== START ==================
+# background excel updater
+asyncio.create_task(excel_updater())
 
 app.run_polling()

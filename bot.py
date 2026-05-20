@@ -9,7 +9,7 @@ from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTyp
 
 # ================== AYARLAR ==================
 
-BOT_TOKEN = "BURAYA_BOT_TOKEN"
+BOT_TOKEN = "8134035994:AAGbDKtDPADu0P59DthBkGDx7FZeIuewAKQ"
 EXCEL_FILE = "tesisatlar.xlsx"
 
 ADMIN_ID = 7311284778

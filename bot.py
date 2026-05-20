@@ -2,12 +2,16 @@ import pandas as pd
 import re
 import time
 import os
+import asyncio
+from flask import Flask
+from threading import Thread
+
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
 
 # ================== AYARLAR ==================
 
-BOT_TOKEN = "YOUR_BOT_TOKEN"
+BOT_TOKEN = "BURAYA_BOT_TOKEN"
 EXCEL_FILE = "tesisatlar.xlsx"
 
 ADMIN_ID = 7311284778
@@ -39,12 +43,12 @@ user_colors = ["🔴","🟢","🔵","🟡","🟣","🟠"]
 def get_user_color(user_id):
     return user_colors[user_id % len(user_colors)]
 
-# ================== EXCEL SAFE LOAD ==================
+# ================== EXCEL ==================
 
 def load_excel():
     try:
         if not os.path.exists(EXCEL_FILE):
-            print("❌ Excel bulunamadı:", EXCEL_FILE)
+            print("Excel bulunamadı:", EXCEL_FILE)
             return pd.DataFrame()
 
         df = pd.read_excel(EXCEL_FILE)
@@ -56,15 +60,19 @@ def load_excel():
         return df
 
     except Exception as e:
-        print("❌ Excel hata:", e)
+        print("Excel hata:", e)
         return pd.DataFrame()
 
 df = load_excel()
 
-async def update_data_periodically(context: ContextTypes.DEFAULT_TYPE):
+# ================== BACKGROUND UPDATE ==================
+
+async def periodic_update():
     global df
-    df = load_excel()
-    print("📊 Excel güncellendi")
+    while True:
+        df = load_excel()
+        print("📊 Excel güncellendi")
+        await asyncio.sleep(60)
 
 # ================== HELPERS ==================
 
@@ -126,7 +134,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if len(tesisatlar) == 1:
             endeks = get_endeks(tesisatlar[0])
             cevap += f"{endeks if endeks else NOT_FOUND_MSG}\n"
-
         else:
             sıra = 1
             for num in tesisatlar:
@@ -215,15 +222,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # ================= SADECE FOTO =================
-
     if photos:
         photo_timers[user_id] = now
         tesisat_counts[user_id] = 0
         return
 
 
-# ================== BOT START ==================
+# ================== BOT ==================
 
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
@@ -231,13 +236,24 @@ app.add_handler(
     MessageHandler(filters.TEXT | filters.PHOTO, handle_message)
 )
 
-# SAFE JOBQUEUE (optional)
-if app.job_queue:
-    app.job_queue.run_repeating(
-        update_data_periodically,
-        interval=60,
-        first=1
-    )
-
 print("🤖 Bot aktif...")
+
+# background task
+asyncio.create_task(periodic_update())
+
+# ================== FLASK ==================
+
+app_flask = Flask(__name__)
+
+@app_flask.route("/")
+def home():
+    return "Bot çalışıyor."
+
+def run():
+    app_flask.run(host="0.0.0.0", port=10000)
+
+Thread(target=run).start()
+
+# ================== START ==================
+
 app.run_polling()

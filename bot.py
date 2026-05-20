@@ -227,6 +227,5 @@ app.add_handler(
 print("🤖 Bot aktif...")
 
 # background excel updater
-asyncio.create_task(excel_updater())
 
 app.run_polling()

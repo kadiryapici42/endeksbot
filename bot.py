@@ -27,7 +27,7 @@ def run_web():
 
 # ================== AYARLAR ==================
 
-BOT_TOKEN = "8134035994:AAGbDKtDPADu0P59DthBkGDx7FZeIuewAKQ"
+BOT_TOKEN = "8134035994:AAGljKZ2k8xjxYun8R0hJBzxKRLWyKf4Qws"
 ADMIN_ID = 7311284778
 
 CSV_URL = "https://docs.google.com/spreadsheets/d/1gwgQnpOnu4DB-T5c-eXoMAsNoeGIQTOp0v99cc4uJfc/export?format=csv&gid=0"

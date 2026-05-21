@@ -1,9 +1,9 @@
 import os
 import time
 import re
+import threading
 import pandas as pd
 from flask import Flask
-from threading import Thread
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
 
@@ -42,15 +42,15 @@ def run_web():
     port = int(os.environ.get("PORT", 10000))
     web.run(host="0.0.0.0", port=port)
 
-Thread(target=run_web).start()
+threading.Thread(target=run_web).start()
 
 # ================== MEMORY ==================
 
 photo_timers = {}
 user_colors = ["🔴", "🟢", "🔵", "🟡", "🟣", "🟠"]
 
-def color(user_id):
-    return user_colors[user_id % len(user_colors)]
+def color(uid):
+    return user_colors[uid % len(user_colors)]
 
 # ================== DATA ==================
 
@@ -82,7 +82,7 @@ def load_data():
         print("❌ Sheets hata:", e)
         df = pd.DataFrame()
 
-# ================== HELP ==================
+# ================== HELPERS ==================
 
 def get_endeks(num):
     if df.empty:
@@ -106,7 +106,7 @@ def get_endeks(num):
 def is_admin(uid):
     return uid == ADMIN_ID
 
-# ================== BOT ==================
+# ================== BOT HANDLER ==================
 
 async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -114,6 +114,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     chat_id = update.effective_chat.id
+
     if update.effective_chat.type in ("group", "supergroup"):
         if chat_id not in ALLOWED_GROUP_IDS:
             return
@@ -129,6 +130,17 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     photos = update.message.photo
 
     nums = re.findall(r"\b\d+\b", text)
+    now = time.time()
+
+    # ================= FOTO GELDİ (SADECE FOTO) =================
+
+    if photos and not nums:
+        photo_timers[uid] = now
+        return
+
+    # foto + tesisat GELDİ
+    if photos and nums:
+        photo_timers[uid] = now
 
     # ================= ADMIN =================
 
@@ -156,12 +168,6 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             i += 1
 
         await update.message.reply_text(msg, parse_mode="HTML")
-        return
-
-    # ================= FOTO =================
-
-    if photos:
-        photo_timers[uid] = time.time()
         return
 
     # ================= TESİSAT =================

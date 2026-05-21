@@ -42,7 +42,13 @@ def run_web():
     port = int(os.environ.get("PORT", 10000))
     web.run(host="0.0.0.0", port=port)
 
-threading.Thread(target=run_web).start()
+def start():
+    Thread(target=run_web, daemon=True).start()
+    app.run_polling(drop_pending_updates=True)
+
+if __name__ == "__main__":
+    print("BOT BAŞLADI")
+    start()
 
 # ================== MEMORY ==================
 

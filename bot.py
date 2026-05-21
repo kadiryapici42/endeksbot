@@ -29,6 +29,8 @@ def run_web():
 
 BOT_TOKEN = "8134035994:AAGbDKtDPADu0P59DthBkGDx7FZeIuewAKQ"
 
+ADMIN_ID = 7311284778  # 👈 SENİN ADMIN ID
+
 CSV_URL = "https://docs.google.com/spreadsheets/d/1gwgQnpOnu4DB-T5c-eXoMAsNoeGIQTOp0v99cc4uJfc/export?format=csv&gid=0"
 
 # ================== DATA ==================
@@ -65,9 +67,16 @@ def get_endeks(num):
         f"RC: {r.get('RC','')}"
     )
 
-# ================== BOT ==================
+# ================== ADMIN CONTROL ==================
+
+def is_admin(uid):
+    return uid == ADMIN_ID
+
+# ================== BOT STATE ==================
 
 photo_state = {}
+
+# ================== HANDLER ==================
 
 async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -76,25 +85,26 @@ async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = update.message.text or update.message.caption or ""
     photos = update.message.photo
-
     nums = re.findall(r"\b\d+\b", text)
 
     user_id = update.effective_user.id
     now = time.time()
 
-    # FOTO
-    if photos and not nums:
-        photo_state[user_id] = now
-        return
+    admin = is_admin(user_id)
 
-    # FOTO + TESİSAT
-    if photos and nums:
+    # ================= FOTO KAYDI =================
+
+    if photos:
         photo_state[user_id] = now
 
-    # TESİSAT
+    photo_ok = user_id in photo_state
+
+    # ================= TESİSAT =================
+
     if nums:
 
-        if user_id not in photo_state:
+        # 🔥 ADMIN HER ZAMAN SERBEST
+        if not admin and not photo_ok:
             await update.message.reply_text("❗️ Önce fotoğraf göndermelisin.")
             return
 

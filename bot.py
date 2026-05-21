@@ -13,6 +13,8 @@ from telegram.ext import (
     filters
 )
 
+from telegram.request import HTTPXRequest
+
 # ================== FLASK ==================
 
 web = Flask(__name__)
@@ -186,7 +188,20 @@ async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ================== START ==================
 
-app = ApplicationBuilder().token(BOT_TOKEN).build()
+request = HTTPXRequest(
+    connection_pool_size=20,
+    read_timeout=30,
+    write_timeout=30,
+    connect_timeout=30,
+    pool_timeout=30
+)
+
+app = (
+    ApplicationBuilder()
+    .token(BOT_TOKEN)
+    .request(request)
+    .build()
+)
 
 app.add_handler(
     MessageHandler(
@@ -206,7 +221,13 @@ def start():
     print("DATA LOADED")
 
     app.run_polling(
-        drop_pending_updates=True
+        drop_pending_updates=True,
+        timeout=30,
+        read_timeout=30,
+        write_timeout=30,
+        connect_timeout=30,
+        pool_timeout=30,
+        allowed_updates=Update.ALL_TYPES
     )
 
 # ================== MAIN ==================

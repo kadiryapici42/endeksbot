@@ -220,7 +220,7 @@ def start():
 
     print("DATA LOADED")
 
-   app.run_polling(
+  app.run_polling(
     drop_pending_updates=True,
     timeout=30,
     allowed_updates=Update.ALL_TYPES

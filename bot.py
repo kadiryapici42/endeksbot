@@ -90,7 +90,7 @@ async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text or update.message.caption or ""
     photos = update.message.photo
 
-    nums = re.findall(r"\b\d+\b", text)
+    nums = re.findall(r"\d{6,12}", text)
 
     user_id = update.effective_user.id
     user_name = update.effective_user.first_name

@@ -1,6 +1,9 @@
-import pandas as pd
-import re
+import os
 import time
+import re
+import threading
+import pandas as pd
+from flask import Flask
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
 
@@ -29,10 +32,23 @@ MUAF_GROUP_IDS = [
 
 NOT_FOUND_MSG = "❗️ Tesisat numarası bulunamadı."
 
+# ================== FLASK (RENDER PORT FIX) ==================
+
+app_web = Flask(__name__)
+
+@app_web.route("/")
+def home():
+    return "Bot çalışıyor"
+
+def run_web():
+    port = int(os.environ.get("PORT", 10000))
+    app_web.run(host="0.0.0.0", port=port)
+
+threading.Thread(target=run_web).start()
+
 # ================== MEMORY ==================
 
 photo_timers = {}
-
 user_colors = ["🔴", "🟢", "🔵", "🟡", "🟣", "🟠"]
 
 def get_user_color(user_id):
@@ -44,7 +60,6 @@ df = pd.DataFrame()
 
 def load_data():
     global df
-
     try:
         df = pd.read_csv(
             CSV_URL,
@@ -71,7 +86,7 @@ def load_data():
         print("SATIR:", len(df))
 
     except Exception as e:
-        print("❌ Veri çekme hatası:", e)
+        print("❌ Veri hatası:", e)
         df = pd.DataFrame()
 
 async def update_data(context: ContextTypes.DEFAULT_TYPE):
@@ -87,7 +102,6 @@ def get_endeks(num):
         return None
 
     row = df[df["Tesisat"] == num]
-
     if row.empty:
         return None
 
@@ -105,7 +119,7 @@ def get_endeks(num):
 def is_admin(user_id):
     return user_id == ADMIN_ID
 
-# ================== MESSAGE HANDLER ==================
+# ================== HANDLER ==================
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -124,17 +138,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = user.id
     name = user.first_name
-
     color = get_user_color(user_id)
 
     text = update.message.text or update.message.caption or ""
     photos = update.message.photo
 
     tesisatlar = re.findall(r"\b\d+\b", text)
-
     now = time.time()
 
-    # foto süresi temizleme
     if user_id in photo_timers:
         if now - photo_timers[user_id] > 120:
             photo_timers.pop(user_id, None)
@@ -162,7 +173,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # ================= MUAF GRUP =================
+    # ================= MUAF =================
 
     if is_muaf_group and tesisatlar:
 
@@ -208,7 +219,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="HTML",
             reply_to_message_id=update.message.message_id
         )
-
         return
 
     # ================= SADECE FOTO =================
@@ -251,8 +261,8 @@ app.add_handler(MessageHandler(filters.TEXT | filters.PHOTO, handle_message))
 
 app.job_queue.run_repeating(update_data, interval=120, first=1)
 
-print("🤖 Bot aktif...")
-
 load_data()
+
+print("BOT BAŞLADI")
 
 app.run_polling(drop_pending_updates=True)

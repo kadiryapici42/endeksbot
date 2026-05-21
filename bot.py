@@ -208,10 +208,8 @@ app.add_handler(
         filters.TEXT | filters.PHOTO,
         handler
     )
-)
 
 def start():
-
     Thread(target=run_web, daemon=True).start()
 
     print("FLASK STARTED")
@@ -220,11 +218,11 @@ def start():
 
     print("DATA LOADED")
 
-  app.run_polling(
-    drop_pending_updates=True,
-    timeout=30,
-    allowed_updates=Update.ALL_TYPES
-)
+    app.run_polling(
+        drop_pending_updates=True,
+        timeout=30,
+        allowed_updates=Update.ALL_TYPES
+    )
 
 # ================== MAIN ==================
 

@@ -28,8 +28,7 @@ def run_web():
 # ================== AYARLAR ==================
 
 BOT_TOKEN = "8134035994:AAGbDKtDPADu0P59DthBkGDx7FZeIuewAKQ"
-
-ADMIN_ID = 7311284778  # 👈 SENİN ADMIN ID
+ADMIN_ID = 7311284778
 
 CSV_URL = "https://docs.google.com/spreadsheets/d/1gwgQnpOnu4DB-T5c-eXoMAsNoeGIQTOp0v99cc4uJfc/export?format=csv&gid=0"
 
@@ -67,16 +66,14 @@ def get_endeks(num):
         f"RC: {r.get('RC','')}"
     )
 
-# ================== ADMIN CONTROL ==================
+# ================== ADMIN ==================
 
 def is_admin(uid):
     return uid == ADMIN_ID
 
-# ================== BOT STATE ==================
+# ================== BOT ==================
 
 photo_state = {}
-
-# ================== HANDLER ==================
 
 async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -85,6 +82,7 @@ async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = update.message.text or update.message.caption or ""
     photos = update.message.photo
+
     nums = re.findall(r"\b\d+\b", text)
 
     user_id = update.effective_user.id
@@ -92,31 +90,31 @@ async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     admin = is_admin(user_id)
 
-    # ================= FOTO KAYDI =================
-
+    # FOTO GELDİ
     if photos:
         photo_state[user_id] = now
 
-    photo_ok = user_id in photo_state
+    # TESİSAT YOKSA ÇIK
+    if not nums:
+        return
 
-    # ================= TESİSAT =================
+    # ================= FOTO KONTROL =================
+    # 🔥 ADMIN MUAF
+    if not admin and user_id not in photo_state:
+        await update.message.reply_text("❗️ Önce fotoğraf göndermelisin.")
+        return
 
-    if nums:
+    # ================= CEVAP =================
 
-        # 🔥 ADMIN HER ZAMAN SERBEST
-        if not admin and not photo_ok:
-            await update.message.reply_text("❗️ Önce fotoğraf göndermelisin.")
-            return
+    msg = ""
+    i = 1
 
-        msg = ""
-        i = 1
+    for n in nums[:5]:
+        endeks = get_endeks(n)
+        msg += f"{i}. {endeks or '❗️ Bulunamadı'}\n\n"
+        i += 1
 
-        for n in nums[:5]:
-            endeks = get_endeks(n)
-            msg += f"{i}. {endeks or '❗️ Bulunamadı'}\n\n"
-            i += 1
-
-        await update.message.reply_text(msg, parse_mode="HTML")
+    await update.message.reply_text(msg, parse_mode="HTML")
 
 # ================== START ==================
 

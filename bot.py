@@ -1,14 +1,11 @@
 import os
-import re
 import time
-import logging
+import re
 import pandas as pd
-
 from threading import Thread
 from flask import Flask
 
 from telegram import Update
-from telegram.constants import ParseMode
 from telegram.ext import (
     ApplicationBuilder,
     MessageHandler,
@@ -16,69 +13,42 @@ from telegram.ext import (
     filters
 )
 
-# =====================================================
-# LOGGING
-# =====================================================
-
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO
-)
-
-logger = logging.getLogger(__name__)
-
-# =====================================================
-# FLASK
-# =====================================================
+# ================== FLASK ==================
 
 web = Flask(__name__)
 
 @web.route("/")
 def home():
-    return "BOT AKTIF"
-
+    return "OK"
 
 def run_web():
     port = int(os.environ.get("PORT", 10000))
     web.run(host="0.0.0.0", port=port)
 
-# =====================================================
-# AYARLAR
-# =====================================================
+# ================== AYARLAR ==================
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
-ADMIN_ID = int(os.environ.get("ADMIN_ID", "0"))
 
-CSV_URL = (
-    "https://docs.google.com/spreadsheets/d/"
-    "1gwgQnpOnu4DB-T5c-eXoMAsNoeGIQTOp0v99cc4uJfc/"
-    "export?format=csv&gid=0"
-)
+ADMIN_ID = 7311284778
 
-# =====================================================
-# DATA
-# =====================================================
+CSV_URL = "https://docs.google.com/spreadsheets/d/1gwgQnpOnu4DB-T5c-eXoMAsNoeGIQTOp0v99cc4uJfc/export?format=csv&gid=0"
+
+# ================== DATA ==================
 
 df = pd.DataFrame()
 
-
 def load_data():
     global df
-
     try:
         df = pd.read_csv(CSV_URL, dtype=str, encoding="utf-8-sig")
         df.columns = df.columns.str.strip()
         df = df.fillna("")
-
-        logger.info(f"Sheets yüklendi: {len(df)} kayıt")
-
+        print("✅ Sheets yüklendi:", len(df))
     except Exception as e:
-        logger.error(f"Sheets yükleme hatası: {e}")
+        print("❌ Sheets hata:", e)
         df = pd.DataFrame()
 
-
 def get_endeks(num):
-
     if df.empty:
         return None
 
@@ -90,197 +60,121 @@ def get_endeks(num):
     r = row.iloc[0]
 
     return (
-        f"<blockquote>"
-        f"<b>📌 TESİSAT:</b> <code>{num}</code>\n"
-        f"<b>🔴 T1:</b> {r.get('T1', '')}\n"
-        f"<b>🟠 T2:</b> {r.get('T2', '')}\n"
-        f"<b>🟢 T3:</b> {r.get('T3', '')}\n"
-        f"<b>🔵 RI:</b> {r.get('RI', '')}\n"
-        f"<b>🟣 RC:</b> {r.get('RC', '')}"
-        f"</blockquote>"
+        f"<b>{num}</b>\n"
+        f"T1: {r.get('T1','')}\n"
+        f"T2: {r.get('T2','')}\n"
+        f"T3: {r.get('T3','')}\n"
+        f"RI: {r.get('RI','')}\n"
+        f"RC: {r.get('RC','')}"
     )
 
-# =====================================================
-# ADMIN
-# =====================================================
+# ================== ADMIN ==================
 
+def is_admin(uid):
+    return uid == ADMIN_ID
 
-def is_admin(user_id):
-    return user_id == ADMIN_ID
-
-# =====================================================
-# GLOBAL STATE
-# =====================================================
+# ================== BOT ==================
 
 photo_state = {}
 last_request = {}
 
-PHOTO_TIMEOUT = 300
-SPAM_TIMEOUT = 3
-
-# =====================================================
-# HANDLER
-# =====================================================
-
 async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    try:
+    if not update.message:
+        return
 
-        if not update.message:
+    text = update.message.text or update.message.caption or ""
+    photos = update.message.photo
+
+    nums = re.findall(r"\b\d+\b", text)
+
+    user_id = update.effective_user.id
+    user_name = update.effective_user.first_name
+
+    now = time.time()
+
+    admin = is_admin(user_id)
+
+    # ================= SPAM ENGEL =================
+
+    if user_id in last_request:
+        if now - last_request[user_id] < 3:
             return
 
-        user = update.effective_user
+    last_request[user_id] = now
 
-        if not user:
-            return
+    # ================= KULLANICI RENK =================
 
-        user_id = user.id
+    colors = [
+        "🔴", "🟠", "🟡", "🟢",
+        "🔵", "🟣", "⚫", "⚪",
+        "🟤"
+    ]
 
-        now = time.time()
+    user_color = colors[user_id % len(colors)]
 
-        text = update.message.text or update.message.caption or ""
+    # FOTO GELDİ
+    if photos:
+        photo_state[user_id] = now
+        return
 
-        photos = update.message.photo
+    # TESİSAT YOKSA ÇIK
+    if not nums:
+        return
 
-        admin = is_admin(user_id)
+    # ================= FOTO KONTROL =================
 
-        # =================================================
-        # SPAM KORUMA
-        # =================================================
+    # 🔥 ADMIN MUAF
+    if not admin:
 
-        if user_id in last_request:
-
-            if now - last_request[user_id] < SPAM_TIMEOUT:
-                return
-
-        last_request[user_id] = now
-
-        # =================================================
-        # FOTO GELDİ
-        # =================================================
-
-        if photos:
-
-            photo_state[user_id] = now
-
+        if user_id not in photo_state:
             await update.message.reply_text(
-                "✅ Fotoğraf alındı. Şimdi tesisat numarasını gönderebilirsin."
+                "❗️ Önce fotoğraf göndermelisin."
             )
-
             return
 
-        # =================================================
-        # TESİSAT NUMARASI BUL
-        # =================================================
-
-        nums = re.findall(r"\b\d+\b", text)
-
-        if not nums:
-            return
-
-        # =================================================
-        # FOTOĞRAF KONTROL
-        # =================================================
-
-        if not admin:
-
-            if user_id not in photo_state:
-
-                await update.message.reply_text(
-                    "❗ Önce sayaç fotoğrafı göndermelisin."
-                )
-
-                return
-
-            # FOTOĞRAF SÜRESİ
-            if now - photo_state[user_id] > PHOTO_TIMEOUT:
-
-                photo_state.pop(user_id, None)
-
-                await update.message.reply_text(
-                    "⌛ Fotoğraf süresi doldu. Tekrar fotoğraf gönder."
-                )
-
-                return
-
-        # =================================================
-        # CEVAP OLUŞTUR
-        # =================================================
-
-        msg = "<b>📋 ENDEKS SONUÇLARI</b>\n\n"
-
-        i = 1
-
-        for n in nums[:5]:
-
-            endeks = get_endeks(n)
-
-            if endeks:
-                msg += f"{i}. {endeks}\n\n"
-            else:
-                msg += (
-                    f"{i}. <b>{n}</b> ❌ Bulunamadı\n\n"
-                )
-
-            i += 1
-
-        await update.message.reply_text(
-            msg,
-            parse_mode=ParseMode.HTML
-        )
-
-        # =================================================
-        # TEK KULLANIMLIK FOTO
-        # =================================================
-
-        if not admin:
+        # FOTO 5 DAKİKA GEÇERLİ
+        if now - photo_state[user_id] > 300:
             photo_state.pop(user_id, None)
 
-    except Exception as e:
-
-        logger.error(f"Handler hata: {e}")
-
-        try:
             await update.message.reply_text(
-                "❌ Bir hata oluştu. Tekrar deneyin."
+                "⌛ Fotoğraf süresi doldu. Tekrar fotoğraf gönder."
             )
-        except:
-            pass
+            return
 
-# =====================================================
-# START
-# =====================================================
+    # ================= CEVAP =================
+
+    msg = f"{user_color} <b>{user_name}</b>\n\n"
+
+    i = 1
+
+    for n in nums[:5]:
+        endeks = get_endeks(n)
+        msg += f"{i}. {endeks or '❗️ Bulunamadı'}\n\n"
+        i += 1
+
+    await update.message.reply_text(msg, parse_mode="HTML")
+
+    # FOTOĞRAFI SIFIRLA
+    if not admin:
+        photo_state.pop(user_id, None)
+
+# ================== START ==================
 
 def start():
-
     Thread(target=run_web, daemon=True).start()
-
-    logger.info("Flask başlatıldı")
+    print("FLASK STARTED")
 
     load_data()
+    print("DATA LOADED")
 
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    app.run_polling(drop_pending_updates=True)
 
-    app.add_handler(
-        MessageHandler(
-            filters.TEXT | filters.PHOTO,
-            handler
-        )
-    )
+# ================== MAIN ==================
 
-    logger.info("Bot polling başlatılıyor")
-
-    app.run_polling(
-        drop_pending_updates=True,
-        allowed_updates=Update.ALL_TYPES
-    )
-
-# =====================================================
-# MAIN
-# =====================================================
+app = ApplicationBuilder().token(BOT_TOKEN).build()
+app.add_handler(MessageHandler(filters.TEXT | filters.PHOTO, handler))
 
 if __name__ == "__main__":
-
-    logger.info("BOT STARTED")
-
+    print("BOT STARTED")
     start()

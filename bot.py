@@ -113,15 +113,16 @@ async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_color = colors[user_id % len(colors)]
 
-    # FOTO GELDİ
-    if photos:
-        photo_state[user_id] = now
-        return
+  # FOTO GELDİ
+if photos:
+    photo_state[user_id] = now
 
-    # TESİSAT YOKSA ÇIK
+    # FOTOĞRAFTA TESİSAT YOKSA ÇIK
     if not nums:
+        await update.message.reply_text(
+            "✅ Fotoğraf alındı."
+        )
         return
-
     # ================= FOTO KONTROL =================
 
     # 🔥 ADMIN MUAF

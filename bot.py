@@ -39,16 +39,20 @@ df = pd.DataFrame()
 
 def load_data():
     global df
+
     try:
         df = pd.read_csv(CSV_URL, dtype=str, encoding="utf-8-sig")
         df.columns = df.columns.str.strip()
         df = df.fillna("")
+
         print("✅ Sheets yüklendi:", len(df))
+
     except Exception as e:
         print("❌ Sheets hata:", e)
         df = pd.DataFrame()
 
 def get_endeks(num):
+
     if df.empty:
         return None
 
@@ -113,34 +117,48 @@ async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_color = colors[user_id % len(colors)]
 
-  # FOTO GELDİ
-if photos:
-    photo_state[user_id] = now
+    # ================= FOTO GELDİ =================
 
-    # FOTOĞRAFTA TESİSAT YOKSA ÇIK
+    if photos:
+
+        photo_state[user_id] = now
+
+        # FOTO + TESİSAT YOKSA
+        if not nums:
+
+            await update.message.reply_text(
+                "✅ Fotoğraf alındı."
+            )
+
+            return
+
+    # ================= TESİSAT YOKSA ÇIK =================
+
     if not nums:
-        await update.message.reply_text(
-            "✅ Fotoğraf alındı."
-        )
         return
+
     # ================= FOTO KONTROL =================
 
-    # 🔥 ADMIN MUAF
+    # ADMIN MUAF
     if not admin:
 
         if user_id not in photo_state:
+
             await update.message.reply_text(
                 "❗️ Önce fotoğraf göndermelisin."
             )
+
             return
 
         # FOTO 5 DAKİKA GEÇERLİ
         if now - photo_state[user_id] > 300:
+
             photo_state.pop(user_id, None)
 
             await update.message.reply_text(
                 "⌛ Fotoğraf süresi doldu. Tekrar fotoğraf gönder."
             )
+
             return
 
     # ================= CEVAP =================
@@ -150,11 +168,17 @@ if photos:
     i = 1
 
     for n in nums[:5]:
+
         endeks = get_endeks(n)
+
         msg += f"{i}. {endeks or '❗️ Bulunamadı'}\n\n"
+
         i += 1
 
-    await update.message.reply_text(msg, parse_mode="HTML")
+    await update.message.reply_text(
+        msg,
+        parse_mode="HTML"
+    )
 
     # FOTOĞRAFI SIFIRLA
     if not admin:
@@ -162,20 +186,33 @@ if photos:
 
 # ================== START ==================
 
+app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+app.add_handler(
+    MessageHandler(
+        filters.TEXT | filters.PHOTO,
+        handler
+    )
+)
+
 def start():
+
     Thread(target=run_web, daemon=True).start()
+
     print("FLASK STARTED")
 
     load_data()
+
     print("DATA LOADED")
 
-    app.run_polling(drop_pending_updates=True)
+    app.run_polling(
+        drop_pending_updates=True
+    )
 
 # ================== MAIN ==================
 
-app = ApplicationBuilder().token(BOT_TOKEN).build()
-app.add_handler(MessageHandler(filters.TEXT | filters.PHOTO, handler))
-
 if __name__ == "__main__":
+
     print("BOT STARTED")
+
     start()

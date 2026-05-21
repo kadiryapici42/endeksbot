@@ -3,6 +3,9 @@ import time
 import re
 import pandas as pd
 
+from threading import Thread
+from flask import Flask
+
 from telegram import Update
 from telegram.ext import (
     ApplicationBuilder,
@@ -11,33 +14,54 @@ from telegram.ext import (
     filters
 )
 
-# ================== AYARLAR ==================
+# ================= FLASK =================
+
+web = Flask(__name__)
+
+@web.route("/")
+def home():
+    return "Bot aktif"
+
+def run_web():
+    port = int(os.environ.get("PORT", 10000))
+    web.run(host="0.0.0.0", port=port)
+
+# ================= AYARLAR =================
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
-
-if not BOT_TOKEN:
-    raise ValueError("BOT_TOKEN bulunamadı!")
 
 ADMIN_ID = 7311284778
 
 CSV_URL = "https://docs.google.com/spreadsheets/d/1gwgQnpOnu4DB-T5c-eXoMAsNoeGIQTOp0v99cc4uJfc/export?format=csv&gid=0"
 
-# ================== DATA ==================
+# ================= DATA =================
 
 df = pd.DataFrame()
 
 def load_data():
     global df
+
     try:
-        df = pd.read_csv(CSV_URL, dtype=str, encoding="utf-8-sig")
+        df = pd.read_csv(
+            CSV_URL,
+            dtype=str,
+            encoding="utf-8-sig"
+        )
+
         df.columns = df.columns.str.strip()
+
         df = df.fillna("")
-        print("DATA LOADED:", len(df))
+
+        print("DATA YÜKLENDİ:", len(df))
+
     except Exception as e:
-        print("CSV ERROR:", e)
+
+        print("CSV HATASI:", e)
+
         df = pd.DataFrame()
 
 def get_endeks(num):
+
     if df.empty:
         return None
 
@@ -53,22 +77,23 @@ def get_endeks(num):
 
     return (
         f"<b>{num}</b>\n"
-        f"T1: {r.get('T1','')}\n"
-        f"T2: {r.get('T2','')}\n"
-        f"T3: {r.get('T3','')}\n"
-        f"RI: {r.get('RI','')}\n"
-        f"RC: {r.get('RC','')}"
+        f"T1: {r.get('T1', '')}\n"
+        f"T2: {r.get('T2', '')}\n"
+        f"T3: {r.get('T3', '')}\n"
+        f"RI: {r.get('RI', '')}\n"
+        f"RC: {r.get('RC', '')}"
     )
 
-# ================== STATE ==================
+# ================= STATE =================
 
 photo_state = {}
+
 last_request = {}
 
 def is_admin(uid):
     return uid == ADMIN_ID
 
-# ================== HANDLER ==================
+# ================= HANDLER =================
 
 async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -76,17 +101,21 @@ async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     text = update.message.text or update.message.caption or ""
+
     photos = update.message.photo
 
     nums = re.findall(r"\d{6,12}", text)
 
     user_id = update.effective_user.id
+
     user_name = update.effective_user.first_name
 
     now = time.time()
 
-    # SPAM KORUMA
+    # SPAM ENGEL
+
     if user_id in last_request:
+
         if now - last_request[user_id] < 3:
             return
 
@@ -95,50 +124,93 @@ async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     admin = is_admin(user_id)
 
     # FOTO GELDİ
+
     if photos:
+
         photo_state[user_id] = now
 
         if not nums:
-            await update.message.reply_text("Fotoğraf alındı.")
+
+            await update.message.reply_text(
+                "✅ Fotoğraf alındı."
+            )
+
             return
+
+    # TESİSAT YOK
 
     if not nums:
         return
 
-    # FOTO ZORUNLULUK (ADMIN HARİÇ)
+    # FOTO KONTROL
+
     if not admin:
+
         if user_id not in photo_state:
-            await update.message.reply_text("Önce fotoğraf göndermelisin.")
+
+            await update.message.reply_text(
+                "❗ Önce fotoğraf göndermelisin."
+            )
+
             return
 
         if now - photo_state[user_id] > 300:
+
             photo_state.pop(user_id, None)
-            await update.message.reply_text("Fotoğraf süresi doldu.")
+
+            await update.message.reply_text(
+                "⌛ Fotoğraf süresi doldu."
+            )
+
             return
 
-    # RENK
-    colors = ["🔴","🟠","🟡","🟢","🔵","🟣","⚫","⚪","🟤"]
+    # RENKLER
+
+    colors = [
+        "🔴",
+        "🟠",
+        "🟡",
+        "🟢",
+        "🔵",
+        "🟣",
+        "⚫",
+        "⚪",
+        "🟤"
+    ]
+
     user_color = colors[user_id % len(colors)]
 
     # CEVAP
+
     msg = f"{user_color} <b>{user_name}</b>\n\n"
 
     i = 1
+
     for n in nums[:5]:
+
         endeks = get_endeks(n)
-        msg += f"{i}. {endeks or 'Bulunamadı'}\n\n"
+
+        msg += f"{i}. {endeks or '❌ Bulunamadı'}\n\n"
+
         i += 1
 
-    await update.message.reply_text(msg, parse_mode="HTML")
+    await update.message.reply_text(
+        msg,
+        parse_mode="HTML"
+    )
+
+    # FOTO RESET
 
     if not admin:
         photo_state.pop(user_id, None)
 
-# ================== MAIN ==================
+# ================= MAIN =================
 
 def main():
 
-    print("BOT STARTED")
+    print("BOT BAŞLADI")
+
+    Thread(target=run_web, daemon=True).start()
 
     load_data()
 
@@ -151,11 +223,13 @@ def main():
         )
     )
 
+    print("BOT AKTİF")
+
     app.run_polling(
         drop_pending_updates=True
     )
 
-# ================== RUN ==================
+# ================= RUN =================
 
 if __name__ == "__main__":
     main()

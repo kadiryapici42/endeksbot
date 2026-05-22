@@ -32,7 +32,7 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
 ADMIN_ID = 7311284778
 
-CSV_URL = "https://docs.google.com/spreadsheets/d/1gwgQnpOnu4DB-T5c-eXoMAsNoeGIQTOp0v99cc4uJfc/export?format=csv&gid=0"
+CSV_URL = "https://docs.google.com/spreadsheets/d/1gwgQnpOnu4DB-T5c-eXoMAsNoeGIQTOp0v99cc4uJfc/edit?gid=348877690#gid=348877690"
 
 # ================= DATA =================
 

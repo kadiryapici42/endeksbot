@@ -31,8 +31,8 @@ def run_web():
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
 ADMIN_ID = 7311284778
-
-CSV_URL = "https://docs.google.com/spreadsheets/d/1gwgQnpOnu4DB-T5c-eXoMAsNoeGIQTOp0v99cc4uJfc/edit?gid=348877690#gid=348877690"
+90
+CSV_URL = "https://docs.google.com/spreadsheets/d/1gwgQnpOnu4DB-T5c-eXoMAsNoeGIQTOp0v99cc4uJfc/edit?gid=2103514594#gid=2103514594"
 
 # ================= DATA =================
 

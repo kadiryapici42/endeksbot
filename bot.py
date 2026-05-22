@@ -39,18 +39,22 @@ CSV_URL = "https://docs.google.com/spreadsheets/d/1gwgQnpOnu4DB-T5c-eXoMAsNoeGIQ
 df = pd.DataFrame()
 
 def load_data():
+
     global df
 
     try:
-        df = pd.read_csv(
+
+        yeni_df = pd.read_csv(
             CSV_URL,
             dtype=str,
             encoding="utf-8-sig"
         )
 
-        df.columns = df.columns.str.strip()
+        yeni_df.columns = yeni_df.columns.str.strip()
 
-        df = df.fillna("")
+        yeni_df = yeni_df.fillna("")
+
+        df = yeni_df
 
         print("DATA YÜKLENDİ:", len(df))
 
@@ -58,7 +62,35 @@ def load_data():
 
         print("CSV HATASI:", e)
 
-        df = pd.DataFrame()
+def auto_refresh():
+
+    while True:
+
+        try:
+
+            load_data()
+
+            print("DATA YENİLENDİ")
+
+        except Exception as e:
+
+            print("YENİLEME HATASI:", e)
+
+        time.sleep(300)  # 5 dakika
+
+def normalize(v):
+
+    if v is None:
+        return ""
+
+    v = str(v).strip()
+
+    if "," in v and "." in v:
+        v = v.replace(".", "").replace(",", ".")
+    elif "," in v:
+        v = v.replace(",", ".")
+
+    return v
 
 def get_endeks(num):
 
@@ -77,11 +109,11 @@ def get_endeks(num):
 
     return (
         f"<b>{num}</b>\n"
-        f"T1: {r.get('T1', '')}\n"
-        f"T2: {r.get('T2', '')}\n"
-        f"T3: {r.get('T3', '')}\n"
-        f"RI: {r.get('RI', '')}\n"
-        f"RC: {r.get('RC', '')}"
+        f"T1: {normalize(r.get('T1', ''))}\n"
+        f"T2: {normalize(r.get('T2', ''))}\n"
+        f"T3: {normalize(r.get('T3', ''))}\n"
+        f"RI: {normalize(r.get('RI', ''))}\n"
+        f"RC: {normalize(r.get('RC', ''))}"
     )
 
 # ================= STATE =================
@@ -211,6 +243,8 @@ def main():
     print("BOT BAŞLADI")
 
     Thread(target=run_web, daemon=True).start()
+
+    Thread(target=auto_refresh, daemon=True).start()
 
     load_data()
 

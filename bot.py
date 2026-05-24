@@ -136,11 +136,11 @@ def get_endeks(num):
 
     return (
         f"<b>{num}</b>\n"
-        f"T1: {normalize(r.get('T1', ''))}\n"
-        f"T2: {normalize(r.get('T2', ''))}\n"
-        f"T3: {normalize(r.get('T3', ''))}\n"
-        f"RI: {normalize(r.get('RI', ''))}\n"
-        f"RC: {normalize(r.get('RC', ''))}"
+        f"<b>T1:</b> {normalize(r.get('T1', ''))}\n"
+        f"<b>T2:</b> {normalize(r.get('T2', ''))}\n"
+        f"<b>T3:</b> {normalize(r.get('T3', ''))}\n"
+        f"<b>RI:</b> {normalize(r.get('RI', ''))}\n"
+        f"<b>RC:</b> {normalize(r.get('RC', ''))}"
     )
 
 # ================= STATE =================
@@ -186,7 +186,7 @@ async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ================= SPAM ENGEL =================
 
-    if not free_group:
+    if not free_group and not admin:
 
         if user_id in last_request:
 
@@ -254,7 +254,7 @@ async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ================= CEVAP =================
 
-    msg = f"{user_color} <b>{user_name}</b>\n\n"
+    msg = f"{user_color} <b>{user_name}</b>\n━━━━━━━━━━━━━━\n\n"
 
     limit = len(nums) if free_group else 5
 
@@ -264,7 +264,10 @@ async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         endeks = get_endeks(n)
 
-        msg += f"{i}. {endeks or '❌ Bulunamadı'}\n\n"
+        msg += (
+            f"🔢 <b>{i}. Tesisat</b>\n"
+            f"{endeks or '❌ Bulunamadı'}\n\n"
+        )
 
         i += 1
 

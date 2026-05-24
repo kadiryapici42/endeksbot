@@ -31,8 +31,13 @@ def run_web():
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
 ADMIN_ID = 7311284778
-90
-CSV_URL = "https://docs.google.com/spreadsheets/d/1gwgQnpOnu4DB-T5c-eXoMAsNoeGIQTOp0v99cc4uJfc/edit?gid=2103514594#gid=2103514594"
+
+# Google Sheets CSV linki
+CSV_URL = (
+    "https://docs.google.com/spreadsheets/d/"
+    "1gwgQnpOnu4DB-T5c-eXoMAsNoeGIQTOp0v99cc4uJfc/"
+    "export?format=csv&gid=2103514594"
+)
 
 # ================= DATA =================
 
@@ -53,6 +58,13 @@ def load_data():
         yeni_df.columns = yeni_df.columns.str.strip()
 
         yeni_df = yeni_df.fillna("")
+
+        # Tesisat kolonunu string yap
+        yeni_df["Tesisat"] = (
+            yeni_df["Tesisat"]
+            .astype(str)
+            .str.strip()
+        )
 
         df = yeni_df
 
@@ -259,8 +271,9 @@ def main():
 
     print("BOT AKTİF")
 
+    # Eski mesajları da okusun
     app.run_polling(
-        drop_pending_updates=True
+        drop_pending_updates=False
     )
 
 # ================= RUN =================

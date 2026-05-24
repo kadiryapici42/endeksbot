@@ -134,13 +134,21 @@ def get_endeks(num):
 
     r = row.iloc[0]
 
+    t1 = normalize(r.get('T1', ''))
+    t2 = normalize(r.get('T2', ''))
+    t3 = normalize(r.get('T3', ''))
+    ri = normalize(r.get('RI', ''))
+    rc = normalize(r.get('RC', ''))
+
     return (
         f"<b>{num}</b>\n"
-        f"<b>T1:</b> {normalize(r.get('T1', ''))}\n"
-        f"<b>T2:</b> {normalize(r.get('T2', ''))}\n"
-        f"<b>T3:</b> {normalize(r.get('T3', ''))}\n"
-        f"<b>RI:</b> {normalize(r.get('RI', ''))}\n"
-        f"<b>RC:</b> {normalize(r.get('RC', ''))}"
+        f"<pre>"
+        f"T1 : {t1:>12}\n"
+        f"T2 : {t2:>12}\n"
+        f"T3 : {t3:>12}\n"
+        f"RI : {ri:>12}\n"
+        f"RC : {rc:>12}"
+        f"</pre>"
     )
 
 # ================= STATE =================

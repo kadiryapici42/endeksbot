@@ -32,6 +32,21 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
 ADMIN_ID = 7311284778
 
+# Fotoğraf zorunlu gruplar
+ALLOWED_GROUP_IDS = [
+    -1003159684647,
+    -1003222476077,
+    -1003174102297,
+    -1003215786503,
+    -4902679499,
+    -1003980973190
+]
+
+# Sınırsız / serbest grup
+FREE_GROUP_IDS = [
+    -1003989682635
+]
+
 # Google Sheets CSV linki
 CSV_URL = (
     "https://docs.google.com/spreadsheets/d/"
@@ -59,12 +74,12 @@ def load_data():
 
         yeni_df = yeni_df.fillna("")
 
-        # Tesisat kolonunu string yap
-        yeni_df["Tesisat"] = (
-            yeni_df["Tesisat"]
-            .astype(str)
-            .str.strip()
-        )
+        if "Tesisat" in yeni_df.columns:
+            yeni_df["Tesisat"] = (
+                yeni_df["Tesisat"]
+                .astype(str)
+                .str.strip()
+            )
 
         df = yeni_df
 
@@ -88,7 +103,7 @@ def auto_refresh():
 
             print("YENİLEME HATASI:", e)
 
-        time.sleep(300)  # 5 dakika
+        time.sleep(300)
 
 def normalize(v):
 
@@ -154,20 +169,33 @@ async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_name = update.effective_user.first_name
 
+    chat_id = update.effective_chat.id
+
     now = time.time()
-
-    # SPAM ENGEL
-
-    if user_id in last_request:
-
-        if now - last_request[user_id] < 3:
-            return
-
-    last_request[user_id] = now
 
     admin = is_admin(user_id)
 
-    # FOTO GELDİ
+    # ================= GRUP KONTROL =================
+
+    allowed = chat_id in ALLOWED_GROUP_IDS
+    free_group = chat_id in FREE_GROUP_IDS
+
+    # Admin her yerde çalışabilir
+    if not allowed and not free_group and not admin:
+        return
+
+    # ================= SPAM ENGEL =================
+
+    if not free_group:
+
+        if user_id in last_request:
+
+            if now - last_request[user_id] < 3:
+                return
+
+        last_request[user_id] = now
+
+    # ================= FOTO GELDİ =================
 
     if photos:
 
@@ -181,14 +209,14 @@ async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             return
 
-    # TESİSAT YOK
+    # ================= TESİSAT YOK =================
 
     if not nums:
         return
 
-    # FOTO KONTROL
+    # ================= FOTO KONTROL =================
 
-    if not admin:
+    if not admin and not free_group:
 
         if user_id not in photo_state:
 
@@ -208,7 +236,7 @@ async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             return
 
-    # RENKLER
+    # ================= RENKLER =================
 
     colors = [
         "🔴",
@@ -224,13 +252,15 @@ async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_color = colors[user_id % len(colors)]
 
-    # CEVAP
+    # ================= CEVAP =================
 
     msg = f"{user_color} <b>{user_name}</b>\n\n"
 
+    limit = len(nums) if free_group else 5
+
     i = 1
 
-    for n in nums[:5]:
+    for n in nums[:limit]:
 
         endeks = get_endeks(n)
 
@@ -243,9 +273,9 @@ async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="HTML"
     )
 
-    # FOTO RESET
+    # ================= FOTO RESET =================
 
-    if not admin:
+    if not admin and not free_group:
         photo_state.pop(user_id, None)
 
 # ================= MAIN =================
@@ -271,7 +301,6 @@ def main():
 
     print("BOT AKTİF")
 
-    # Eski mesajları da okusun
     app.run_polling(
         drop_pending_updates=False
     )

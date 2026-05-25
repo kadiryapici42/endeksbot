@@ -171,6 +171,24 @@ async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     chat_id = update.effective_chat.id
 
+    # ================= GRUP ID GÖSTER =================
+
+    print(
+        f"GRUP ADI: {update.effective_chat.title} | "
+        f"CHAT ID: {chat_id}"
+    )
+
+    # ================= /id KOMUTU =================
+
+    if text == "/id":
+
+        await update.message.reply_text(
+            f"Bu grubun ID'si:\n<code>{chat_id}</code>",
+            parse_mode="HTML"
+        )
+
+        return
+
     now = time.time()
 
     admin = is_admin(user_id)

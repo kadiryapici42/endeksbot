@@ -14,25 +14,62 @@ from telegram.ext import (
     filters
 )
 
-# ================= FLASK =================
+# =========================================================
+# FLASK
+# =========================================================
 
 web = Flask(__name__)
+
 
 @web.route("/")
 def home():
     return "Bot aktif"
 
+
 def run_web():
     port = int(os.environ.get("PORT", 10000))
-    web.run(host="0.0.0.0", port=port)
+    web.run(
+        host="0.0.0.0",
+        port=port
+    )
 
-# ================= AYARLAR =================
+
+# =========================================================
+# AYARLAR
+# =========================================================
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
 ADMIN_ID = 7311284778
 
+
+# =========================================================
+# GOOGLE SHEETS
+# =========================================================
+
+SPREADSHEET_ID = (
+    "1gwgQnpOnu4DB-T5c-eXoMAsNoeGIQTOp0v99cc4uJfc"
+)
+
+
+# Google Sheets içerisindeki 6 sayfanın GID'leri
+
+SHEET_GIDS = [
+    "2103514594",
+    "1165500074",
+    "1464069935",
+    "1766165080",
+    "1438103280",
+    "2112208933"
+]
+
+
+# =========================================================
+# GRUPLAR
+# =========================================================
+
 # Fotoğraf zorunlu gruplar
+
 ALLOWED_GROUP_IDS = [
     -1003159684647,
     -1003222476077,
@@ -52,52 +89,175 @@ ALLOWED_GROUP_IDS = [
     -5477787093
 ]
 
+
 # Sınırsız / serbest grup
+
 FREE_GROUP_IDS = [
     -1003989682635
 ]
 
-# Google Sheets CSV linki
-CSV_URL = (
-    "https://docs.google.com/spreadsheets/d/"
-    "1gwgQnpOnu4DB-T5c-eXoMAsNoeGIQTOp0v99cc4uJfc/"
-    "export?format=csv&gid=2103514594"
-)
 
-# ================= DATA =================
+# =========================================================
+# DATA
+# =========================================================
 
 df = pd.DataFrame()
+
 
 def load_data():
 
     global df
 
+    print("")
+    print("========================================")
+    print("GOOGLE SHEETS VERİLERİ YÜKLENİYOR")
+    print("========================================")
+
+    dfs = []
+
+    for gid in SHEET_GIDS:
+
+        try:
+
+            csv_url = (
+                f"https://docs.google.com/spreadsheets/d/"
+                f"{SPREADSHEET_ID}/"
+                f"export?format=csv&gid={gid}"
+            )
+
+            print("")
+            print(f"📄 SAYFA OKUNUYOR: {gid}")
+
+            sheet_df = pd.read_csv(
+                csv_url,
+                dtype=str,
+                encoding="utf-8-sig"
+            )
+
+            # Kolon isimlerini temizle
+
+            sheet_df.columns = (
+                sheet_df.columns
+                .astype(str)
+                .str.strip()
+            )
+
+            # Boş hücreleri boş metne çevir
+
+            sheet_df = sheet_df.fillna("")
+
+
+            # Tesisat kolonunu temizle
+
+            if "Tesisat" in sheet_df.columns:
+
+                sheet_df["Tesisat"] = (
+                    sheet_df["Tesisat"]
+                    .astype(str)
+                    .str.strip()
+                )
+
+
+            # DataFrame'i listeye ekle
+
+            dfs.append(sheet_df)
+
+            print(
+                f"✅ SAYFA YÜKLENDİ | "
+                f"GID: {gid} | "
+                f"Kayıt: {len(sheet_df)}"
+            )
+
+
+        except Exception as e:
+
+            print(
+                f"❌ SAYFA OKUNAMADI | "
+                f"GID: {gid}"
+            )
+
+            print(
+                f"HATA: {e}"
+            )
+
+
+    # Hiçbir sayfa okunamadıysa
+    # mevcut veriyi silme
+
+    if not dfs:
+
+        print("")
+        print("❌ HİÇBİR GOOGLE SHEETS SAYFASI YÜKLENEMEDİ")
+        print("")
+
+        return
+
+
     try:
 
-        yeni_df = pd.read_csv(
-            CSV_URL,
-            dtype=str,
-            encoding="utf-8-sig"
+        # =================================================
+        # TÜM SAYFALARI BİRLEŞTİR
+        # =================================================
+
+        yeni_df = pd.concat(
+            dfs,
+            ignore_index=True
         )
 
-        yeni_df.columns = yeni_df.columns.str.strip()
 
-        yeni_df = yeni_df.fillna("")
+        # =================================================
+        # TESİSAT TEMİZLİĞİ
+        # =================================================
 
         if "Tesisat" in yeni_df.columns:
+
             yeni_df["Tesisat"] = (
                 yeni_df["Tesisat"]
                 .astype(str)
                 .str.strip()
             )
 
+
+            # Boş tesisatları kaldır
+
+            yeni_df = yeni_df[
+                yeni_df["Tesisat"] != ""
+            ]
+
+
+            # Aynı tesisat birden fazla
+            # sayfada varsa ilkini kullan
+
+            yeni_df = yeni_df.drop_duplicates(
+                subset=["Tesisat"],
+                keep="first"
+            )
+
+
+        # Global dataframe'i güncelle
+
         df = yeni_df
 
-        print("DATA YÜKLENDİ:", len(df))
+
+        print("")
+        print("========================================")
+        print("✅ TÜM SAYFALAR BİRLEŞTİRİLDİ")
+        print(f"📊 TOPLAM KAYIT: {len(df)}")
+        print("========================================")
+        print("")
+
 
     except Exception as e:
 
-        print("CSV HATASI:", e)
+        print("")
+        print("❌ VERİ BİRLEŞTİRME HATASI:")
+        print(e)
+        print("")
+
+
+# =========================================================
+# OTOMATİK VERİ YENİLEME
+# =========================================================
 
 def auto_refresh():
 
@@ -105,15 +265,28 @@ def auto_refresh():
 
         try:
 
+            print("")
+            print("🔄 VERİLER YENİLENİYOR...")
+
             load_data()
 
-            print("DATA YENİLENDİ")
 
         except Exception as e:
 
-            print("YENİLEME HATASI:", e)
+            print(
+                "❌ YENİLEME HATASI:",
+                e
+            )
+
+
+        # 300 saniye = 5 dakika
 
         time.sleep(300)
+
+
+# =========================================================
+# NORMALIZE
+# =========================================================
 
 def normalize(v):
 
@@ -122,27 +295,58 @@ def normalize(v):
 
     v = str(v).strip()
 
+
+    # Örnek:
+    # 1.234,56 → 1234.56
+
     if "," in v and "." in v:
-        v = v.replace(".", "").replace(",", ".")
+
+        v = (
+            v
+            .replace(".", "")
+            .replace(",", ".")
+        )
+
+
+    # Örnek:
+    # 1234,56 → 1234.56
+
     elif "," in v:
+
         v = v.replace(",", ".")
 
+
     return v
+
+
+# =========================================================
+# TESİSAT / ENDEKS BUL
+# =========================================================
 
 def get_endeks(num):
 
     if df.empty:
+
         return None
+
 
     if "Tesisat" not in df.columns:
+
         return None
 
-    row = df[df["Tesisat"] == str(num)]
+
+    row = df[
+        df["Tesisat"] == str(num)
+    ]
+
 
     if row.empty:
+
         return None
 
+
     r = row.iloc[0]
+
 
     return (
         f"<b>{num}</b>\n"
@@ -153,81 +357,168 @@ def get_endeks(num):
         f"<b>RC:</b> {normalize(r.get('RC', ''))}"
     )
 
-# ================= STATE =================
+
+# =========================================================
+# STATE
+# =========================================================
 
 photo_state = {}
 
 last_request = {}
 
+
 def is_admin(uid):
+
     return uid == ADMIN_ID
 
-# ================= HANDLER =================
 
-async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# =========================================================
+# TELEGRAM HANDLER
+# =========================================================
+
+async def handler(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
 
     if not update.message:
+
         return
 
-    text = update.message.text or update.message.caption or ""
+
+    # =====================================================
+    # MESAJ BİLGİLERİ
+    # =====================================================
+
+    text = (
+        update.message.text
+        or update.message.caption
+        or ""
+    )
+
 
     photos = update.message.photo
 
-    nums = re.findall(r"\d{6,12}", text)
 
-    user_id = update.effective_user.id
+    # 6-12 haneli tesisat numaralarını bul
 
-    user_name = update.effective_user.first_name
+    nums = re.findall(
+        r"\d{6,12}",
+        text
+    )
 
-    chat_id = update.effective_chat.id
 
-    # ================= GRUP ID GÖSTER =================
+    user_id = (
+        update.effective_user.id
+    )
+
+
+    user_name = (
+        update.effective_user.first_name
+    )
+
+
+    chat_id = (
+        update.effective_chat.id
+    )
+
+
+    # =====================================================
+    # GRUP ID GÖSTER
+    # =====================================================
 
     print(
-        f"GRUP ADI: {update.effective_chat.title} | "
+        f"GRUP ADI: "
+        f"{update.effective_chat.title} | "
         f"CHAT ID: {chat_id}"
     )
 
-    # ================= /id KOMUTU =================
+
+    # =====================================================
+    # /id KOMUTU
+    # =====================================================
 
     if text == "/id":
 
         await update.message.reply_text(
-            f"Bu grubun ID'si:\n<code>{chat_id}</code>",
+            f"Bu grubun ID'si:\n"
+            f"<code>{chat_id}</code>",
             parse_mode="HTML"
         )
 
         return
 
+
+    # =====================================================
+    # ZAMAN
+    # =====================================================
+
     now = time.time()
 
-    admin = is_admin(user_id)
 
-    # ================= GRUP KONTROL =================
+    admin = is_admin(
+        user_id
+    )
 
-    allowed = chat_id in ALLOWED_GROUP_IDS
-    free_group = chat_id in FREE_GROUP_IDS
+
+    # =====================================================
+    # GRUP KONTROL
+    # =====================================================
+
+    allowed = (
+        chat_id in ALLOWED_GROUP_IDS
+    )
+
+
+    free_group = (
+        chat_id in FREE_GROUP_IDS
+    )
+
 
     # Admin her yerde çalışabilir
-    if not allowed and not free_group and not admin:
+
+    if (
+        not allowed
+        and not free_group
+        and not admin
+    ):
+
         return
 
-    # ================= SPAM ENGEL =================
 
-    if not free_group and not admin:
+    # =====================================================
+    # SPAM ENGEL
+    # =====================================================
+
+    if (
+        not free_group
+        and not admin
+    ):
 
         if user_id in last_request:
 
-            if now - last_request[user_id] < 3:
+            if (
+                now
+                - last_request[user_id]
+                < 3
+            ):
+
                 return
+
 
         last_request[user_id] = now
 
-    # ================= FOTO GELDİ =================
+
+    # =====================================================
+    # FOTOĞRAF GELDİ
+    # =====================================================
 
     if photos:
 
         photo_state[user_id] = now
+
+
+        # Sadece fotoğraf gönderildiyse
 
         if not nums:
 
@@ -237,14 +528,26 @@ async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             return
 
-    # ================= TESİSAT YOK =================
+
+    # =====================================================
+    # TESİSAT NUMARASI YOK
+    # =====================================================
 
     if not nums:
+
         return
 
-    # ================= FOTO KONTROL =================
 
-    if not admin and not free_group:
+    # =====================================================
+    # FOTOĞRAF KONTROL
+    # =====================================================
+
+    if (
+        not admin
+        and not free_group
+    ):
+
+        # Fotoğraf gönderilmemiş
 
         if user_id not in photo_state:
 
@@ -254,9 +557,20 @@ async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             return
 
-        if now - photo_state[user_id] > 300:
 
-            photo_state.pop(user_id, None)
+        # Fotoğrafın süresi 5 dakika
+
+        if (
+            now
+            - photo_state[user_id]
+            > 300
+        ):
+
+            photo_state.pop(
+                user_id,
+                None
+            )
+
 
             await update.message.reply_text(
                 "⌛ Fotoğraf süresi doldu."
@@ -264,7 +578,10 @@ async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             return
 
-    # ================= RENKLER =================
+
+    # =====================================================
+    # KULLANICI RENKLERİ
+    # =====================================================
 
     colors = [
         "🔴",
@@ -278,50 +595,119 @@ async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🟤"
     ]
 
-    user_color = colors[user_id % len(colors)]
 
-    # ================= CEVAP =================
+    user_color = (
+        colors[
+            user_id % len(colors)
+        ]
+    )
 
-    msg = f"{user_color} <b>{user_name}</b>\n━━━━━━━━━━━━━━\n\n"
 
-    limit = len(nums) if free_group else 5
+    # =====================================================
+    # CEVAP
+    # =====================================================
+
+    msg = (
+        f"{user_color} "
+        f"<b>{user_name}</b>\n"
+        f"━━━━━━━━━━━━━━\n\n"
+    )
+
+
+    # Serbest grupta sınırsız
+    # Normal gruplarda maksimum 5
+
+    limit = (
+        len(nums)
+        if free_group
+        else 5
+    )
+
 
     i = 1
+
 
     for n in nums[:limit]:
 
         endeks = get_endeks(n)
+
 
         msg += (
             f"🔢 <b>{i}. Tesisat</b>\n"
             f"{endeks or '❌ Bulunamadı'}\n\n"
         )
 
+
         i += 1
+
+
+    # =====================================================
+    # TELEGRAM'A CEVAP GÖNDER
+    # =====================================================
 
     await update.message.reply_text(
         msg,
         parse_mode="HTML"
     )
 
-    # ================= FOTO RESET =================
 
-    if not admin and not free_group:
-        photo_state.pop(user_id, None)
+    # =====================================================
+    # FOTOĞRAF STATE RESET
+    # =====================================================
 
-# ================= MAIN =================
+    if (
+        not admin
+        and not free_group
+    ):
+
+        photo_state.pop(
+            user_id,
+            None
+        )
+
+
+# =========================================================
+# MAIN
+# =========================================================
 
 def main():
 
-    print("BOT BAŞLADI")
+    print("")
+    print("========================================")
+    print("🚀 BOT BAŞLADI")
+    print("========================================")
+    print("")
 
-    Thread(target=run_web, daemon=True).start()
 
-    Thread(target=auto_refresh, daemon=True).start()
+    # Flask
+
+    Thread(
+        target=run_web,
+        daemon=True
+    ).start()
+
+
+    # Google Sheets otomatik yenileme
+
+    Thread(
+        target=auto_refresh,
+        daemon=True
+    ).start()
+
+
+    # İlk veri yükleme
 
     load_data()
 
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    # Telegram bot
+
+    app = (
+        ApplicationBuilder()
+        .token(BOT_TOKEN)
+        .build()
+    )
+
 
     app.add_handler(
         MessageHandler(
@@ -330,13 +716,23 @@ def main():
         )
     )
 
-    print("BOT AKTİF")
+
+    print("")
+    print("========================================")
+    print("🤖 BOT AKTİF")
+    print("========================================")
+    print("")
+
 
     app.run_polling(
         drop_pending_updates=False
     )
 
-# ================= RUN =================
+
+# =========================================================
+# RUN
+# =========================================================
 
 if __name__ == "__main__":
+
     main()
